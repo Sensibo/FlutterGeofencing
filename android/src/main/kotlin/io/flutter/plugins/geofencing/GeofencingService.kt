@@ -9,20 +9,18 @@ import android.content.Intent
 import android.os.Handler
 import android.util.Log
 import androidx.core.app.JobIntentService
+import com.google.android.gms.location.GeofencingEvent
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
-import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.PluginRegistry.PluginRegistrantCallback
 import io.flutter.view.FlutterCallbackInformation
 import io.flutter.view.FlutterMain
 import io.flutter.view.FlutterNativeView
 import io.flutter.view.FlutterRunArguments
-import java.util.ArrayDeque
+import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.UUID
-
-import com.google.android.gms.location.GeofencingEvent
 
 class GeofencingService : MethodCallHandler, JobIntentService() {
     private val queue = ArrayDeque<List<Any>>()
@@ -32,10 +30,13 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
     companion object {
         @JvmStatic
         private val TAG = "GeofencingService"
+
         @JvmStatic
         private val JOB_ID = UUID.randomUUID().mostSignificantBits.toInt()
+
         @JvmStatic
         private var sBackgroundFlutterView: FlutterNativeView? = null
+
         @JvmStatic
         private val sServiceStarted = AtomicBoolean(false)
 
@@ -60,29 +61,33 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
                 val callbackHandle = context.getSharedPreferences(
                         GeofencingPlugin.SHARED_PREFERENCES_KEY,
                         Context.MODE_PRIVATE)
-                        .getLong(GeofencingPlugin.CALLBACK_DISPATCHER_HANDLE_KEY, 0)
-                if (callbackHandle == null || callbackHandle == 0L) {
-                    Log.e(TAG, "Fatal: failed to find callback")
+                        .getLong(GeofencingPlugin.CALLBACK_DISPATCHER_HANDLE_KEY, 0L)
+                if (callbackHandle == 0L) {
+                    Log.e(TAG, "Geofencing Fatal error: CallbackHandle is invalid $callbackHandle")
                     return
                 }
-
-                val callbackInfo = FlutterCallbackInformation.lookupCallbackInformation(callbackHandle)
-                if (callbackInfo == null) {
-                    Log.e(TAG, "Fatal: failed to find callback")
-                    return
+                var callbackInfo: FlutterCallbackInformation? = null
+                try {
+                    callbackInfo = FlutterCallbackInformation.lookupCallbackInformation(callbackHandle)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Geofencing Fatal error: couldn't find FlutterCallbackInformation by this $callbackHandle key: $e")
                 }
-                Log.i(TAG, "Starting GeofencingService...")
-                sBackgroundFlutterView = FlutterNativeView(context, true)
+                if (callbackInfo != null) {
+                    Log.i(TAG, "Starting GeofencingService...")
+                    sBackgroundFlutterView = FlutterNativeView(context, true)
 
-                val registry = sBackgroundFlutterView!!.pluginRegistry
-                sPluginRegistrantCallback.registerWith(registry)
-                val args = FlutterRunArguments()
-                args.bundlePath = FlutterMain.findAppBundlePath(context)
-                args.entrypoint = callbackInfo.callbackName
-                args.libraryPath = callbackInfo.callbackLibraryPath
+                    val registry = sBackgroundFlutterView!!.pluginRegistry
+                    sPluginRegistrantCallback.registerWith(registry)
+                    val args = FlutterRunArguments()
+                    args.bundlePath = FlutterMain.findAppBundlePath(context)
+                    args.entrypoint = callbackInfo.callbackName
+                    args.libraryPath = callbackInfo.callbackLibraryPath
 
-                sBackgroundFlutterView!!.runFromBundle(args)
-                IsolateHolderService.setBackgroundFlutterView(sBackgroundFlutterView)
+                    sBackgroundFlutterView!!.runFromBundle(args)
+                    IsolateHolderService.setBackgroundFlutterView(sBackgroundFlutterView)
+                } else { 
+                    Log.e(TAG, "Geofencing Fatal error: callbackInfo is null. Couldn't find FlutterCallbackInformation by this $callbackHandle key")
+                }
             }
         }
         mBackgroundChannel = MethodChannel(sBackgroundFlutterView,
@@ -90,8 +95,8 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
         mBackgroundChannel.setMethodCallHandler(this)
     }
 
-   override fun onMethodCall(call: MethodCall, result: Result) {
-       when(call.method) {
+    override fun onMethodCall(call: MethodCall, result: Result) {
+        when (call.method) {
             "GeofencingService.initialized" -> {
                 synchronized(sServiceStarted) {
                     while (!queue.isEmpty()) {
