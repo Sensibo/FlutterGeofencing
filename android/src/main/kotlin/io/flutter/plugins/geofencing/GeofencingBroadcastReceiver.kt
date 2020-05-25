@@ -13,10 +13,15 @@ import io.flutter.view.FlutterMain
 
 class GeofencingBroadcastReceiver : BroadcastReceiver() {
     companion object {
-        private const val TAG = "GeofencingBroadcastReceiver"
+        private val TAG = GeofencingBroadcastReceiver::class.java.simpleName
     }
+
     override fun onReceive(context: Context, intent: Intent) {
         FlutterMain.ensureInitializationComplete(context, null)
-        GeofencingService.enqueueWork(context, intent)
+        try {
+            GeofencingService.enqueueWork(context, intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed enqueueWork: $e")
+        }
     }
 }
