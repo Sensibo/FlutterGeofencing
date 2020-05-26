@@ -85,14 +85,18 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
 
                     sBackgroundFlutterView!!.runFromBundle(args)
                     IsolateHolderService.setBackgroundFlutterView(sBackgroundFlutterView)
-                } else { 
+                } else {
                     Log.e(TAG, "Geofencing Fatal error: callbackInfo is null. Couldn't find FlutterCallbackInformation by this $callbackHandle key")
                 }
             }
         }
-        mBackgroundChannel = MethodChannel(sBackgroundFlutterView,
-                "plugins.flutter.io/geofencing_plugin_background")
-        mBackgroundChannel.setMethodCallHandler(this)
+        try {
+            mBackgroundChannel = MethodChannel(sBackgroundFlutterView,
+                    "plugins.flutter.io/geofencing_plugin_background")
+            mBackgroundChannel.setMethodCallHandler(this)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed initializing geofencing_plugin_background plugin: $e")
+        }
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
@@ -100,7 +104,11 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
             "GeofencingService.initialized" -> {
                 synchronized(sServiceStarted) {
                     while (!queue.isEmpty()) {
-                        mBackgroundChannel.invokeMethod("", queue.remove())
+                        try {
+                            mBackgroundChannel.invokeMethod("", queue.remove())
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed GeofencingService.initialized: $e")
+                        }
                     }
                     sServiceStarted.set(true)
                 }
@@ -153,8 +161,11 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
                 // Queue up geofencing events while background isolate is starting
                 queue.add(geofenceUpdateList)
             } else {
-                // Callback method name is intentionally left blank.
-                Handler(mContext.mainLooper).post { mBackgroundChannel.invokeMethod("", geofenceUpdateList) }
+                try {// Callback method name is intentionally left blank.
+                    Handler(mContext.mainLooper).post { mBackgroundChannel.invokeMethod("", geofenceUpdateList) }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed running Handler.post invoking geofence update $e")
+                }
             }
         }
     }
