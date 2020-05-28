@@ -16,10 +16,10 @@ import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingClient
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
-import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.PluginRegistry.Registrar
 import org.json.JSONArray
 
@@ -31,18 +31,25 @@ class GeofencingPlugin(context: Context, activity: Activity?) : MethodCallHandle
     companion object {
         @JvmStatic
         private val TAG = "GeofencingPlugin"
+
         @JvmStatic
         val SHARED_PREFERENCES_KEY = "geofencing_plugin_cache"
+
         @JvmStatic
         val CALLBACK_HANDLE_KEY = "callback_handle"
+
         @JvmStatic
         val CALLBACK_DISPATCHER_HANDLE_KEY = "callback_dispatch_handler"
+
         @JvmStatic
         val PERSISTENT_GEOFENCES_KEY = "persistent_geofences"
+
         @JvmStatic
         val PERSISTENT_GEOFENCES_IDS = "persistent_geofences_ids"
+
         @JvmStatic
         private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+
         @JvmStatic
         private val sGeofenceCacheLock = Object()
 
@@ -79,10 +86,10 @@ class GeofencingPlugin(context: Context, activity: Activity?) : MethodCallHandle
 
         @JvmStatic
         private fun registerGeofence(context: Context,
-                                    geofencingClient: GeofencingClient,
-                                    args: ArrayList<*>?,
-                                    result: Result?,
-                                    cache: Boolean) {
+                                     geofencingClient: GeofencingClient,
+                                     args: ArrayList<*>?,
+                                     result: Result?,
+                                     cache: Boolean) {
             val callbackHandle = args!![0] as Long
             val id = args[1] as String
             val lat = args[2] as Double
@@ -108,19 +115,24 @@ class GeofencingPlugin(context: Context, activity: Activity?) : MethodCallHandle
                 Log.w(TAG, msg)
                 result?.error(msg, null, null)
             }
-            geofencingClient.addGeofences(getGeofencingRequest(geofence, initialTriggers),
-                    getGeofencePendingIndent(context, callbackHandle))?.run {
-                addOnSuccessListener {
-                    Log.i(TAG, "Successfully added geofence")
-                    if (cache) {
-                        addGeofenceToCache(context, id, args)
+            try {
+                geofencingClient.addGeofences(getGeofencingRequest(geofence, initialTriggers),
+                        getGeofencePendingIndent(context, callbackHandle))?.run {
+                    addOnSuccessListener {
+                        Log.i(TAG, "Successfully added geofence")
+                        if (cache) {
+                            addGeofenceToCache(context, id, args)
+                        }
+                        result?.success(true)
                     }
-                    result?.success(true)
+                    addOnFailureListener {
+                        Log.e(TAG, "Failed to add geofence: $it")
+                        result?.error(it.toString(), null, null)
+                    }
                 }
-                addOnFailureListener {
-                    Log.e(TAG, "Failed to add geofence: $it")
-                    result?.error(it.toString(), null, null)
-                }
+            } catch (e: Exception) {
+                result?.error(e.toString(), null, null)
+                Log.e(TAG, "Failed adding geofences $e")
             }
         }
 
@@ -137,10 +149,10 @@ class GeofencingPlugin(context: Context, activity: Activity?) : MethodCallHandle
                 }
                 persistentGeofences.add(id)
                 context.getSharedPreferences(SHARED_PREFERENCES_KEY, Context.MODE_PRIVATE)
-                    .edit()
-                    .putStringSet(PERSISTENT_GEOFENCES_IDS, persistentGeofences)
-                    .putString(getPersistentGeofenceKey(id), obj.toString())
-                    .apply()
+                        .edit()
+                        .putStringSet(PERSISTENT_GEOFENCES_IDS, persistentGeofences)
+                        .putString(getPersistentGeofenceKey(id), obj.toString())
+                        .apply()
             }
         }
 
@@ -176,16 +188,21 @@ class GeofencingPlugin(context: Context, activity: Activity?) : MethodCallHandle
                                    args: ArrayList<*>?,
                                    result: Result) {
             val ids = listOf(args!![0] as String)
-            geofencingClient.removeGeofences(ids).run {
-                addOnSuccessListener {
-                    for (id in ids) {
-                        removeGeofenceFromCache(context, id)
+            try {
+                geofencingClient.removeGeofences(ids).run {
+                    addOnSuccessListener {
+                        for (id in ids) {
+                            removeGeofenceFromCache(context, id)
+                        }
+                        result.success(true)
                     }
-                    result.success(true)
+                    addOnFailureListener {
+                        result.error(it.toString(), null, null)
+                    }
                 }
-                addOnFailureListener {
-                    result.error(it.toString(), null, null)
-                }
+            } catch (e: Exception) {
+                result.error(e.toString(), null, null)
+                Log.e(TAG, "Failed adding geofences $e")
             }
         }
 
@@ -215,9 +232,9 @@ class GeofencingPlugin(context: Context, activity: Activity?) : MethodCallHandle
                 persistentGeofences = HashSet<String>(persistentGeofences)
                 persistentGeofences.remove(id)
                 p.edit()
-                .remove(getPersistentGeofenceKey(id))
-                .putStringSet(PERSISTENT_GEOFENCES_IDS, persistentGeofences)
-                .apply()
+                        .remove(getPersistentGeofenceKey(id))
+                        .putStringSet(PERSISTENT_GEOFENCES_IDS, persistentGeofences)
+                        .apply()
             }
         }
 
@@ -229,7 +246,7 @@ class GeofencingPlugin(context: Context, activity: Activity?) : MethodCallHandle
 
     override fun onMethodCall(call: MethodCall, result: Result) {
         val args = call.arguments<ArrayList<*>>()
-        when(call.method) {
+        when (call.method) {
             "GeofencingPlugin.initializeService" -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     mActivity?.requestPermissions(REQUIRED_PERMISSIONS, 12312)
@@ -238,14 +255,14 @@ class GeofencingPlugin(context: Context, activity: Activity?) : MethodCallHandle
                 result.success(true)
             }
             "GeofencingPlugin.registerGeofence" -> registerGeofence(mContext,
-                                                                    mGeofencingClient,
-                                                                    args,
-                                                                    result,
-                                                                    true)
+                    mGeofencingClient,
+                    args,
+                    result,
+                    true)
             "GeofencingPlugin.removeGeofence" -> removeGeofence(mContext,
-                                                                mGeofencingClient,
-                                                                args,
-                                                                result)
+                    mGeofencingClient,
+                    args,
+                    result)
             "GeofencingPlugin.getRegisteredGeofenceIds" -> getRegisteredGeofenceIds(mContext, result)
             else -> result.notImplemented()
         }
