@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package androidx.core.app;
+package io.flutter.plugins.geofencing;
 
 import android.app.Service;
 import android.app.job.JobInfo;
@@ -265,7 +265,21 @@ public abstract class JobIntentService extends Service {
             public void complete() {
                 synchronized (mLock) {
                     if (mParams != null) {
-                        mParams.completeWork(mJobWork);
+                        try {
+                            mParams.completeWork(mJobWork);
+                            // The following catches are to prevent errors completely work that
+                            //    is done or hasn't started.
+                            // Example:
+                            // Caused by java.lang.IllegalArgumentException:
+                            //     Given work is not active: JobWorkItem {
+                            //       id=4 intent=Intent { (has extras) } dcount=1
+                            //     }
+                            // Issue: https://issuetracker.google.com/u/0/issues/63622293
+                        } catch (SecurityException e) {
+                            Log.e(TAG, "SecurityException: Failed to run mParams.completeWork(mJobWork)!", e);
+                        } catch (IllegalArgumentException e) {
+                            Log.e(TAG, "IllegalArgumentException: Failed to run mParams.completeWork(mJobWork)!", e);
+                        }
                     }
                 }
             }

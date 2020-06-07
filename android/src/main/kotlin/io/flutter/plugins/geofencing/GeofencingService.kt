@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.util.Log
-import androidx.core.app.JobIntentService
 import com.google.android.gms.location.GeofencingEvent
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
