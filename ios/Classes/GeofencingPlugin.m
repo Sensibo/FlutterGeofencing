@@ -141,8 +141,10 @@ static BOOL backgroundIsolateRun = NO;
   _eventQueue = [[NSMutableArray alloc] init];
   _locationManager = [[CLLocationManager alloc] init];
   [_locationManager setDelegate:self];
-  [_locationManager requestAlwaysAuthorization];
-  _locationManager.allowsBackgroundLocationUpdates = YES;
+  if (CLLocationManager.locationServicesEnabled) {
+    [_locationManager requestAlwaysAuthorization];
+    _locationManager.allowsBackgroundLocationUpdates = YES;
+  }
 
   _headlessRunner = [[FlutterEngine alloc] initWithName:@"GeofencingIsolate" project:nil allowHeadlessExecution:YES];
   _registrar = registrar;
@@ -191,7 +193,7 @@ static BOOL backgroundIsolateRun = NO;
                                     identifier:identifier];
   region.notifyOnEntry = ((triggerMask & 0x1) != 0);
   region.notifyOnExit = ((triggerMask & 0x2) != 0);
-  
+
   [self setCallbackHandleForRegionId:callbackHandle regionId:identifier];
   [self->_locationManager startMonitoringForRegion:region];
 }
