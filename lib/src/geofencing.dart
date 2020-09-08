@@ -74,7 +74,7 @@ class GeofenceRegion {
   GeofenceRegion(
       this.id, double latitude, double longitude, this.radius, this.triggers,
       {AndroidGeofencingSettings androidSettings})
-      : location = Location(latitude, longitude),
+      : location = Location(latitude, longitude, 0),
         androidSettings = (androidSettings ?? AndroidGeofencingSettings());
 
   List<dynamic> _toArgs() {
@@ -134,7 +134,7 @@ class GeofencingManager {
   /// `GeofenceEvent.dwell` trigger on iOS, `UnsupportedError` is thrown.
   static Future<void> registerGeofence(
       GeofenceRegion region,
-      void Function(List<String> id, Location location, GeofenceEvent event)
+      void Function(Location location)
           callback) async {
     if (Platform.isIOS &&
         region.triggers.contains(GeofenceEvent.dwell) &&

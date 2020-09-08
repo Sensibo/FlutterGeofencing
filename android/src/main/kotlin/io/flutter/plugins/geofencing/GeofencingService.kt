@@ -10,6 +10,7 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.os.Handler
 import android.util.Log
+import androidx.core.content.ContextCompat.getSystemService
 import com.google.android.gms.location.GeofencingEvent
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -22,6 +23,10 @@ import io.flutter.view.FlutterNativeView
 import io.flutter.view.FlutterRunArguments
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
 
 class GeofencingService : MethodCallHandler, JobIntentService() {
     private val queue = ArrayDeque<List<Any>>()
@@ -29,6 +34,8 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
     private lateinit var mContext: Context
 
     companion object {
+        const val MINIMUM_ACCURACY = 100
+
         @JvmStatic
         private val TAG = "GeofencingService"
 
@@ -131,30 +138,79 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
         startGeofencingService(this)
     }
 
-    override fun onHandleWork(intent: Intent) {
+    private fun createLocationRequest(): LocationRequest {
+        val locationRequest = LocationRequest()
+
+        locationRequest.interval = 60000 // Every 60 seconds
+        locationRequest.fastestInterval = 30000 // Every 30 seconds
+        locationRequest.maxWaitTime = 200000 // Every 5 minutes
+
+        locationRequest.priority = LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY
+
+        return locationRequest
+    }
+
+    private fun requestSingleAccurateLocation(intent: Intent) {
+        val maxRetries = 5
+        val request = createLocationRequest()
+        request.priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+        request.numUpdates = maxRetries
+        LocationServices.getFusedLocationProviderClient(mContext)
+            .requestLocationUpdates(
+                request,
+                object : LocationCallback() {
+                    val wakeLock: PowerManager.WakeLock? =
+                        getSystemService(mContext, PowerManager::class.java)
+                            ?.newWakeLock(
+                                PowerManager.PARTIAL_WAKE_LOCK,
+                                "GeoFencing::AccurateLocation"
+                            )?.apply { acquire(2 * 60 * 1000L /*2 minutes*/) }
+                    var numberCalls = 0
+                    override fun onLocationResult(locationResult: LocationResult?) {
+                        numberCalls++
+                        Log.d(
+                            TAG,
+                            "Got single accurate location update: ${locationResult?.lastLocation}"
+                        )
+                        if (locationResult == null) {
+                            Log.w(TAG, "No location provided.")
+                            return
+                        }
+
+                        when {
+                            locationResult.lastLocation.accuracy <= MINIMUM_ACCURACY -> {
+                                Log.d(TAG, "Location accurate enough, all done with high accuracy.")
+                                callCallback(intent, listOf(locationResult.lastLocation.latitude, locationResult.lastLocation.longitude,
+                                             locationResult.lastLocation.accuracy.toDouble()));
+                                if (wakeLock?.isHeld == true) wakeLock.release()
+                            }
+                            numberCalls >= maxRetries -> {
+                                Log.d(
+                                    TAG,
+                                    "No location was accurate enough, sending our last location anyway"
+                                )
+                                if (locationResult.lastLocation.accuracy <= MINIMUM_ACCURACY * 2)
+                                    callCallback(intent, listOf(locationResult.lastLocation.latitude, locationResult.lastLocation.longitude,
+                                                 locationResult.lastLocation.accuracy.toDouble()));
+                                if (wakeLock?.isHeld == true) wakeLock.release()
+                            }
+                            else -> {
+                                Log.w(
+                                    TAG,
+                                    "Location not accurate enough on retry $numberCalls of $maxRetries"
+                                )
+                            }
+                        }
+                    }
+                },
+                mContext.mainLooper
+            )
+    }
+
+    private fun callCallback(intent: Intent, locationList: List<Double>) {
         val callbackHandle = intent.getLongExtra(GeofencingPlugin.CALLBACK_HANDLE_KEY, 0)
-        val geofencingEvent = GeofencingEvent.fromIntent(intent)
-        if (geofencingEvent.hasError()) {
-            Log.e(TAG, "Geofencing error: ${geofencingEvent.errorCode}")
-            return
-        }
 
-        // Get the transition type.
-        val geofenceTransition = geofencingEvent.geofenceTransition
-
-        // Get the geofences that were triggered. A single event can trigger
-        // multiple geofences.
-        val triggeringGeofences = geofencingEvent.triggeringGeofences.map {
-            it.requestId
-        }
-
-        val location = geofencingEvent.triggeringLocation
-        val locationList = listOf(location.latitude,
-                location.longitude)
-        val geofenceUpdateList = listOf(callbackHandle,
-                triggeringGeofences,
-                locationList,
-                geofenceTransition)
+        val geofenceUpdateList = listOf(callbackHandle, locationList)
 
         synchronized(sServiceStarted) {
             if (!sServiceStarted.get()) {
@@ -168,5 +224,23 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
                 }
             }
         }
+    }
+
+    override fun onHandleWork(intent: Intent) {
+        val geofencingEvent = GeofencingEvent.fromIntent(intent)
+        if (geofencingEvent.hasError()) {
+            Log.e(TAG, "Geofencing error: ${geofencingEvent.errorCode}")
+            return
+        }
+
+        val location = geofencingEvent.triggeringLocation
+        if (location.accuracy > MINIMUM_ACCURACY) {
+            requestSingleAccurateLocation(intent);
+            return;
+        }
+
+        val locationList = listOf(location.latitude, location.longitude, location.accuracy.toDouble())
+        callCallback(intent, locationList);
+
     }
 }

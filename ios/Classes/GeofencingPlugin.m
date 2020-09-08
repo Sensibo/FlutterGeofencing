@@ -125,12 +125,12 @@ static BOOL backgroundIsolateRun = NO;
 
 - (void)sendLocationEvent:(CLRegion *)region eventType:(int)event {
   NSAssert([region isKindOfClass:[CLCircularRegion class]], @"region must be CLCircularRegion");
-  CLLocationCoordinate2D center = region.center;
   int64_t handle = [self getCallbackHandleForRegionId:region.identifier];
   [_callbackChannel
       invokeMethod:@""
+      // Trigger a fake event just to let the app know that an event occured
          arguments:@[
-           @(handle), @[ region.identifier ], @[ @(center.latitude), @(center.longitude) ], @(event)
+           @(handle), @[ @(region.center.latitude), @(region.center.longitude), @123 ]
          ]];
 }
 

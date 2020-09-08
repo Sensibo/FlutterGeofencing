@@ -9,14 +9,16 @@ Location locationFromList(List<double> l) => Location._fromList(l);
 class Location {
   final double latitude;
   final double longitude;
+  final double accuracy;
 
-  const Location(this.latitude, this.longitude);
+  const Location(this.latitude, this.longitude, this.accuracy);
 
   Location._fromList(List<double> l)
-      : assert(l.length == 2),
+      : assert(l.length == 3),
         latitude = l[0],
-        longitude = l[1];
+        longitude = l[1],
+        accuracy = l[2];
 
   @override
-  String toString() => '($latitude, $longitude)';
+  String toString() => '($latitude, $longitude, $accuracy)';
 }
