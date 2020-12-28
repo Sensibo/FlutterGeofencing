@@ -126,12 +126,14 @@ static BOOL backgroundIsolateRun = NO;
 - (void)sendLocationEvent:(CLRegion *)region eventType:(int)event {
   NSAssert([region isKindOfClass:[CLCircularRegion class]], @"region must be CLCircularRegion");
   int64_t handle = [self getCallbackHandleForRegionId:region.identifier];
-  [_callbackChannel
-      invokeMethod:@""
+  if (handle != 0 && _callbackChannel != nil) {
+      [_callbackChannel
+       invokeMethod:@""
       // Trigger a fake event just to let the app know that an event occured
          arguments:@[
            @(handle), @[ @(region.center.latitude), @(region.center.longitude), @123 ]
          ]];
+  }
 }
 
 - (instancetype)init:(NSObject<FlutterPluginRegistrar> *)registrar {

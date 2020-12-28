@@ -17,6 +17,7 @@ class GeofencingBroadcastReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         try {
+            FlutterMain.startInitialization(context)
             FlutterMain.ensureInitializationComplete(context, null)
             GeofencingService.enqueueWork(context, intent)
         } catch (e: IllegalArgumentException) {

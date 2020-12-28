@@ -17,16 +17,19 @@ import com.google.android.gms.location.GeofencingClient
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
 import io.flutter.plugin.common.MethodCall
+import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
+import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.PluginRegistry.Registrar
 import org.json.JSONArray
 
-class GeofencingPlugin(context: Context, activity: Activity?) : MethodCallHandler {
-  private val mContext = context
-  private val mActivity = activity
-  private val mGeofencingClient = LocationServices.getGeofencingClient(mContext)
+class GeofencingPlugin : ActivityAware, FlutterPlugin, MethodCallHandler {
+  private var mContext : Context? = null
+  private var mActivity : Activity? = null
+  private var mGeofencingClient : GeofencingClient? = null
 
   companion object {
     @JvmStatic
@@ -42,16 +45,7 @@ class GeofencingPlugin(context: Context, activity: Activity?) : MethodCallHandle
     @JvmStatic
     val PERSISTENT_GEOFENCES_IDS = "persistent_geofences_ids"
     @JvmStatic
-    private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
-    @JvmStatic
     private val sGeofenceCacheLock = Object()
-
-    @JvmStatic
-    fun registerWith(registrar: Registrar) {
-      val plugin = GeofencingPlugin(registrar.context(), registrar.activity())
-      val channel = MethodChannel(registrar.messenger(), "plugins.flutter.io/geofencing_plugin")
-      channel.setMethodCallHandler(plugin)
-    }
 
     @JvmStatic
     fun reRegisterAfterReboot(context: Context) {
@@ -240,26 +234,56 @@ class GeofencingPlugin(context: Context, activity: Activity?) : MethodCallHandle
     }
   }
 
+  override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+    mContext = binding.getApplicationContext()
+    mGeofencingClient = LocationServices.getGeofencingClient(mContext!!)
+    val channel = MethodChannel(binding.getBinaryMessenger(), "plugins.flutter.io/geofencing_plugin")
+    channel.setMethodCallHandler(this)
+  }
+
+  override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+    mContext = null
+    mGeofencingClient = null
+  }
+
+  override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+    mActivity = binding.getActivity()
+  }
+
+  override fun onDetachedFromActivity() {
+    mActivity = null
+  }
+
+  override fun onDetachedFromActivityForConfigChanges() {
+    mActivity = null
+  }
+
+  override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+    mActivity = binding.getActivity()
+  }
+
   override fun onMethodCall(call: MethodCall, result: Result) {
     val args = call.arguments<ArrayList<*>>()
     when(call.method) {
       "GeofencingPlugin.initializeService" -> {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-          mActivity?.requestPermissions(REQUIRED_PERMISSIONS, 12312)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+          mActivity?.requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_BACKGROUND_LOCATION), 12312)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+          mActivity?.requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 12312)
         }
-        initializeService(mContext, args)
+        initializeService(mContext!!, args)
         result.success(true)
       }
-      "GeofencingPlugin.registerGeofence" -> registerGeofence(mContext,
-              mGeofencingClient,
+      "GeofencingPlugin.registerGeofence" -> registerGeofence(mContext!!,
+              mGeofencingClient!!,
               args,
               result,
               true)
-      "GeofencingPlugin.removeGeofence" -> removeGeofence(mContext,
-              mGeofencingClient,
+      "GeofencingPlugin.removeGeofence" -> removeGeofence(mContext!!,
+              mGeofencingClient!!,
               args,
               result)
-      "GeofencingPlugin.getRegisteredGeofenceIds" -> getRegisteredGeofenceIds(mContext, result)
+      "GeofencingPlugin.getRegisteredGeofenceIds" -> getRegisteredGeofenceIds(mContext!!, result)
       else -> result.notImplemented()
     }
   }
