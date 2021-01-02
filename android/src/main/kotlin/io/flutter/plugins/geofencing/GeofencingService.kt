@@ -80,6 +80,12 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
                     stopSelf()
                     return
                 }
+
+                Log.i(TAG, "Starting GeofencingService...")
+                sBackgroundFlutterEngine = FlutterEngine(context)
+                // We need to create an instance of `FlutterEngine` before looking up the
+                // callback. If we don't, the callback cache won't be initialized and the
+                // lookup will fail.
                 val callbackInfo: FlutterCallbackInformation?
                 try {
                     callbackInfo = FlutterCallbackInformation.lookupCallbackInformation(callbackHandle)
@@ -88,8 +94,6 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
                     stopSelf()
                     return
                 }
-                Log.i(TAG, "Starting GeofencingService...")
-                sBackgroundFlutterEngine = FlutterEngine(context)
 
                 val args = DartCallback(
                     context.getAssets(),
